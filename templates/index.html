@@ -1,0 +1,178 @@
+<!DOCTYPE html>
+<html lang="pt-PT">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Dia & Noite: O Mundo dos Animais - Em Desenvolvimento</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            padding: 40px 20px;
+            color: #333;
+        }
+        
+        .contentor {
+            background: white;
+            padding: 0;
+            max-width: 1000px;
+            width: 100%;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+            color: #333;
+        }
+        
+        .cabecalho {
+            background: #2c3e50;
+            color: white;
+            padding: 50px 60px;
+        }
+        
+        h1 {
+            font-size: 32px;
+            margin-bottom: 10px;
+            font-weight: 600;
+            letter-spacing: -0.5px;
+        }
+        
+        .subtitulo {
+            color: #ecf0f1;
+            font-size: 16px;
+            margin-bottom: 25px;
+            font-weight: 300;
+        }
+        
+        .emblema-estado {
+            display: inline-block;
+            background: #667eea;
+            color: white;
+            padding: 10px 24px;
+            font-weight: 600;
+            font-size: 14px;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+        }
+        
+        .autores {
+            background: #2c3e50;
+            color: white;
+            padding: 40px 60px;
+        }
+        
+        .autores h3 {
+            margin-bottom: 25px;
+            font-size: 20px;
+            font-weight: 600;
+        }
+        
+        .informacao-autores {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+            gap: 40px;
+            margin-top: 20px;
+        }
+        
+        .autor {
+            padding-left: 20px;
+        }
+        
+        .nome-autor {
+            font-weight: 600;
+            font-size: 18px;
+            margin-bottom: 5px;
+        }
+        
+        .identificacao-autor {
+            font-size: 14px;
+            opacity: 0.9;
+            margin-bottom: 8px;
+        }
+        
+        .funcao-autor {
+            font-size: 13px;
+            opacity: 0.8;
+            line-height: 1.5;
+        }
+        
+        .informacao-instituicao {
+            margin-top: 30px;
+            padding-top: 30px;
+            border-top: 1px solid rgba(255,255,255,0.2);
+            font-size: 14px;
+            line-height: 1.8;
+        }
+        
+        .rodape {
+            background: #1a252f;
+            color: #95a5a6;
+            padding: 30px 60px;
+            font-size: 13px;
+            line-height: 1.8;
+            text-align: center;
+        }
+        
+        .rodape p {
+            margin: 5px 0;
+        }
+        
+        @media (max-width: 768px) {
+            .cabecalho,
+            .autores,
+            .rodape {
+                padding: 30px;
+            }
+            
+            h1 {
+                font-size: 26px;
+            }
+            
+            .informacao-autores {
+                grid-template-columns: 1fr;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="contentor">
+        <div class="cabecalho">
+            <h1>Dia & Noite: O Mundo dos Animais</h1>
+            <p class="subtitulo">Activity Provider para Plataforma Inven!RA</p>
+            <div class="emblema-estado">Fase 1 Concluída - Interface do Jogo em Desenvolvimento</div>
+        </div>
+
+        <div class="autores">
+            <h3>EQUIPA DE DESENVOLVIMENTO</h3>
+            <div class="informacao-autores">
+                <div class="autor">
+                    <div class="nome-autor">Henrique Crachat</div>
+                    <div class="identificacao-autor">2501450@estudante.uab.pt</div>
+                    <div class="funcao-autor">Módulo de Desempenho Cognitivo e Progresso</div>
+                </div>
+                <div class="autor">
+                    <div class="nome-autor">Fábio Amado</div>
+                    <div class="identificacao-autor">2501444@estudante.uab.pt</div>
+                    <div class="funcao-autor">Módulo de Interação e Sessões</div>
+                </div>
+            </div>
+            <div class="informacao-instituicao">
+                <strong>Unidade Curricular:</strong> Arquitetura e Padrões de Software<br>
+                <strong>Instituição:</strong> Universidade Aberta
+            </div>
+        </div>
+        
+        <div class="rodape">
+            <p>© 2025 Activity Provider "Dia & Noite: O Mundo dos Animais"</p>
+            <p>Projeto académico desenvolvido para integração com a plataforma Inven!RA</p>
+        </div>
+    </div>
+</body>
+</html>
