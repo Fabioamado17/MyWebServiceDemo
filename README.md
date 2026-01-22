@@ -1,7 +1,7 @@
 # Módulo de Sessões - Fábio Amado
 
 **Padrões Implementados:** Factory Method + Decorator
-**Autores:** Henrique Crachat (2501450) & Fábio Amado (2501444)
+**Autor:** Fábio Amado (2501444)
 **Objetivo:** Analytics de Sessões e Interações
 
 ---
@@ -795,17 +795,9 @@ Outros decorators que poderiam ser implementados:
 
 ---
 
-## Autores
-
-**Henrique Crachat** (2501450@estudante.uab.pt)
-- Factory Method Pattern
-- Challenge types (Audio, Visual, Habitat, Classification)
-- Cognitive Module
+## Autor
 
 **Fábio Amado** (2501444@estudante.uab.pt)
-- Decorator Pattern (TimedDecorator)
-- Session Analytics Module
-- Integration with Inven!RA
 
 **Universidade Aberta**
 UC: Arquitetura e Padrões de Software

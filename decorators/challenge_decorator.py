@@ -4,7 +4,7 @@ Decorator base para desafios.
 Padrão Estrutural: Decorator
 Este é o Decorator abstrato que mantém referência ao componente decorado.
 
-Autores: Henrique Crachat (2501450) & Fábio Amado (2501444)
+Autor: Fábio Amado (2501444)
 UC: Arquitetura e Padrões de Software
 Universidade Aberta
 """

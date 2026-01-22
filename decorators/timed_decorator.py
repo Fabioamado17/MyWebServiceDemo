@@ -4,7 +4,7 @@ Decorator para adicionar limite de tempo aos desafios.
 Padrão Estrutural: Decorator (Concrete Decorator)
 Adiciona funcionalidade de cronometragem e tempo limite aos desafios.
 
-Autores: Henrique Crachat (2501450) & Fábio Amado (2501444)
+Autor: Fábio Amado (2501444)
 UC: Arquitetura e Padrões de Software
 Universidade Aberta
 """

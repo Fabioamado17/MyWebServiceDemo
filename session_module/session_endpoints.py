@@ -1,393 +1,346 @@
 """
-Endpoints Flask para Módulo de Sessões - Fábio Amado (2501444)
+Endpoints Flask para Módulo de Sessões - Refatorado.
 
-Integra Factory Method (ChallengeFactory) com Session Analytics.
+REFATORAÇÕES APLICADAS:
+1. Cut-and-Paste Programming → Decorator @validate_request centraliza validação
+2. Input Kludge → Schemas validam tipos, formatos e valores
 
 Autor: Fábio Amado (2501444@estudante.uab.pt)
 """
 from flask import request, jsonify
 from factories.challenge_factory import ChallengeFactory
 from session_module.session_analytics import session_analytics
-
-
-# =====================================================
-# ENDPOINTS DO MÓDULO SESSÕES (FÁBIO)
-# =====================================================
-# Adicionar estas rotas ao App.py existente
-# =====================================================
+from validation.decorators import validate_request, handle_endpoint_errors
+from validation.schemas import (
+    SessionStartRequest,
+    ChallengeRequest,
+    ChallengeCompleteRequest,
+    InteractionRequest,
+    SessionEndRequest,
+    AnalyticsRequest
+)
 
 
 def register_session_routes(app):
     """
     Registar rotas do módulo de sessões no Flask app.
-    
+
+    NOTA: Endpoints refatorados para usar:
+    - @validate_request(Schema) - Validação automática
+    - @handle_endpoint_errors - Tratamento de erros centralizado
+
     Args:
         app: Instância Flask
     """
-    
+
     @app.route("/api/session/start", methods=['POST'])
-    def start_session():
+    @validate_request(SessionStartRequest)
+    @handle_endpoint_errors
+    def start_session(validated: SessionStartRequest):
         """
         Inicia uma nova sessão de jogo.
-        
+
         Body:
         {
             "user_id": "student123",
-            "session_id": "optional_custom_id"
+            "session_id": "optional_custom_id"  // opcional
         }
-        
+
         Returns:
             ID da sessão criada
         """
-        data = request.get_json()
-        
-        if not data or 'user_id' not in data:
-            return jsonify({
-                'success': False,
-                'error': 'user_id é obrigatório'
-            }), 400
-        
-        try:
-            session_id = session_analytics.start_session(
-                data['user_id'],
-                data.get('session_id')
-            )
-            
-            return jsonify({
-                'success': True,
-                'session_id': session_id,
-                'message': 'Sessão iniciada com sucesso'
-            })
-        
-        except Exception as e:
-            return jsonify({
-                'success': False,
-                'error': str(e)
-            }), 500
-    
-    
+        session_id = session_analytics.start_session(
+            validated.user_id,
+            validated.session_id
+        )
+
+        return jsonify({
+            'success': True,
+            'session_id': session_id,
+            'message': 'Sessão iniciada com sucesso'
+        })
+
+
     @app.route("/api/session/challenge", methods=['POST'])
-    def session_challenge():
+    @validate_request(ChallengeRequest)
+    @handle_endpoint_errors
+    def session_challenge(validated: ChallengeRequest):
         """
         Cria desafio dentro de uma sessão com tracking.
-        
+
         INTEGRAÇÃO FACTORY METHOD:
         - Usa ChallengeFactory.create_challenge()
         - Log automático em session_analytics
-        
+
         Body:
         {
             "session_id": "student123_20241124120000",
-            "animal_id": 1,
-            "challenge_type": "audio"
+            "animal_id": 1,                    // inteiro, animal existente
+            "challenge_type": "audio",         // opcional, default: "random"
+            "difficulty": 1                    // opcional, 1-5, default: 1
         }
-        
+
         Returns:
             Challenge + dados de sessão
         """
-        data = request.get_json()
-        
-        required = ['session_id', 'animal_id']
-        if not all(field in data for field in required):
-            return jsonify({
-                'success': False,
-                'error': f'Campos obrigatórios: {required}'
-            }), 400
-        
-        try:
-            # USAR FACTORY METHOD para criar desafio
-            challenge_type = data.get('challenge_type', 'random')
-            
-            if challenge_type == 'random':
-                challenge = ChallengeFactory.create_random_challenge(
-                    data['animal_id']
-                )
-            else:
-                challenge = ChallengeFactory.create_challenge(
-                    challenge_type,
-                    data['animal_id']
-                )
-            
-            # LOG de início do desafio na sessão
-            session_analytics.log_challenge_start(
-                data['session_id'],
-                challenge
+        # Validação adicional: sessão existe e está ativa
+        validated.validate_session_exists(session_analytics)
+
+        # USAR FACTORY METHOD para criar desafio
+        if validated.challenge_type == 'random':
+            challenge = ChallengeFactory.create_random_challenge(
+                validated.animal_id,
+                validated.difficulty
             )
-            
-            # Obter dados da sessão atual
-            session_summary = session_analytics.get_session_summary(
-                data['session_id']
+        else:
+            challenge = ChallengeFactory.create_challenge(
+                validated.challenge_type,
+                validated.animal_id,
+                validated.difficulty
             )
-            
-            return jsonify({
-                'success': True,
-                'challenge': challenge.to_dict(),
-                'session_context': {
-                    'challenges_in_session': session_summary['challenges_attempted'],
-                    'interactions_in_session': session_summary['total_interactions'],
-                    'session_duration': session_summary['duration']
-                }
-            })
-        
-        except Exception as e:
-            return jsonify({
-                'success': False,
-                'error': str(e)
-            }), 500
-    
-    
+
+        # LOG de início do desafio na sessão
+        session_analytics.log_challenge_start(
+            validated.session_id,
+            challenge
+        )
+
+        # Obter dados da sessão atual
+        session_summary = session_analytics.get_session_summary(
+            validated.session_id
+        )
+
+        return jsonify({
+            'success': True,
+            'challenge': challenge.to_dict(),
+            'session_context': {
+                'challenges_in_session': session_summary['challenges_attempted'],
+                'interactions_in_session': session_summary['total_interactions'],
+                'session_duration': session_summary['duration']
+            }
+        })
+
+
     @app.route("/api/session/complete-challenge", methods=['POST'])
-    def complete_challenge():
+    @validate_request(ChallengeCompleteRequest)
+    @handle_endpoint_errors
+    def complete_challenge(validated: ChallengeCompleteRequest):
         """
         Regista conclusão de desafio com tracking de tempo.
-        
+
         Body:
         {
             "session_id": "student123_20241124120000",
             "challenge_id": "audio_1_4523",
-            "is_correct": true
+            "is_correct": true,               // DEVE ser booleano
+            "difficulty": 3,                  // opcional, 1-5
+            "time_limit": 30                  // opcional, segundos
         }
-        
+
         Returns:
-            Confirmação + stats da sessão
+            Confirmação + stats da sessão + pontuação
         """
-        data = request.get_json()
-        
-        required = ['session_id', 'challenge_id', 'is_correct']
-        if not all(field in data for field in required):
-            return jsonify({
-                'success': False,
-                'error': f'Campos obrigatórios: {required}'
-            }), 400
-        
-        try:
-            session_analytics.log_challenge_complete(
-                data['session_id'],
-                data['challenge_id'],
-                data['is_correct']
-            )
-            
-            session_summary = session_analytics.get_session_summary(
-                data['session_id']
-            )
-            
-            return jsonify({
-                'success': True,
-                'message': 'Desafio concluído',
-                'session_stats': {
-                    'challenges_attempted': session_summary['challenges_attempted'],
-                    'avg_challenge_time': session_summary['avg_challenge_time']
-                }
-            })
-        
-        except Exception as e:
-            return jsonify({
-                'success': False,
-                'error': str(e)
-            }), 500
-    
-    
+        # Validação adicional: desafio foi iniciado na sessão
+        validated.validate_challenge_started(session_analytics)
+
+        score_result = session_analytics.log_challenge_complete(
+            validated.session_id,
+            validated.challenge_id,
+            validated.is_correct,
+            validated.difficulty,
+            validated.time_limit
+        )
+
+        session_summary = session_analytics.get_session_summary(
+            validated.session_id
+        )
+
+        return jsonify({
+            'success': True,
+            'message': 'Desafio concluído',
+            'score': score_result,
+            'session_stats': {
+                'challenges_attempted': session_summary['challenges_attempted'],
+                'avg_challenge_time': session_summary['avg_challenge_time'],
+                'total_score': session_summary['total_score'],
+                'current_streak': session_summary['current_streak']
+            }
+        })
+
+
     @app.route("/api/session/interaction", methods=['POST'])
-    def log_interaction():
+    @validate_request(InteractionRequest)
+    @handle_endpoint_errors
+    def log_interaction(validated: InteractionRequest):
         """
         Regista interação genérica do aluno.
-        
+
         Body:
         {
             "session_id": "student123_20241124120000",
             "event_type": "click_hint",
-            "event_data": {"element": "help_button"}
+            "event_data": {"element": "help_button"}  // opcional
         }
-        
+
         Returns:
             Confirmação
         """
-        data = request.get_json()
-        
-        if not data or 'session_id' not in data or 'event_type' not in data:
-            return jsonify({
-                'success': False,
-                'error': 'session_id e event_type são obrigatórios'
-            }), 400
-        
-        try:
-            session_analytics.log_interaction(
-                data['session_id'],
-                data['event_type'],
-                data.get('event_data')
-            )
-            
-            return jsonify({
-                'success': True,
-                'message': 'Interação registada'
-            })
-        
-        except Exception as e:
-            return jsonify({
-                'success': False,
-                'error': str(e)
-            }), 500
-    
-    
+        session_analytics.log_interaction(
+            validated.session_id,
+            validated.event_type,
+            validated.event_data
+        )
+
+        return jsonify({
+            'success': True,
+            'message': 'Interação registada'
+        })
+
+
     @app.route("/api/session/end", methods=['POST'])
-    def end_session():
+    @validate_request(SessionEndRequest)
+    @handle_endpoint_errors
+    def end_session(validated: SessionEndRequest):
         """
         Termina sessão e retorna sumário completo.
-        
+
         Body:
         {
             "session_id": "student123_20241124120000"
         }
-        
+
         Returns:
             Sumário completo da sessão
         """
-        data = request.get_json()
-        
-        if not data or 'session_id' not in data:
-            return jsonify({
-                'success': False,
-                'error': 'session_id é obrigatório'
-            }), 400
-        
-        try:
-            summary = session_analytics.end_session(data['session_id'])
-            
-            return jsonify({
-                'success': True,
-                'session_summary': summary
-            })
-        
-        except Exception as e:
-            return jsonify({
-                'success': False,
-                'error': str(e)
-            }), 500
-    
-    
+        summary = session_analytics.end_session(validated.session_id)
+
+        return jsonify({
+            'success': True,
+            'session_summary': summary
+        })
+
+
     @app.route("/api/session/report/<user_id>", methods=['GET'])
+    @handle_endpoint_errors
     def get_session_report(user_id):
         """
         Retorna relatório de todas as sessões de um utilizador.
-        
+
         Example:
             GET /api/session/report/student123
         """
-        try:
-            report = session_analytics.get_user_sessions_report(user_id)
-            
-            return jsonify({
-                'success': True,
-                'report': report
-            })
-        
-        except Exception as e:
+        # Validação simples para GET
+        if not user_id or not isinstance(user_id, str):
             return jsonify({
                 'success': False,
-                'error': str(e)
-            }), 500
-    
-    
+                'error': 'user_id inválido'
+            }), 400
+
+        report = session_analytics.get_user_sessions_report(user_id)
+
+        return jsonify({
+            'success': True,
+            'report': report
+        })
+
+
     @app.route("/api/analytics", methods=['POST'])
-    def get_session_analytics():
+    @validate_request(AnalyticsRequest)
+    @handle_endpoint_errors
+    def get_session_analytics(validated: AnalyticsRequest):
         """
         Endpoint compatível com Inven!RA para analytics de sessão.
-        
+
         Body:
         {
             "studentId": "student123"
         }
-        
+
         Returns:
             Analytics formatados para Inven!RA
         """
-        data = request.get_json()
-        
-        if not data or 'studentId' not in data:
-            return jsonify({
-                'success': False,
-                'error': 'studentId é obrigatório'
-            }), 400
-        
-        try:
-            analytics = session_analytics.export_analytics(data['studentId'])
-            
-            return jsonify({
-                'success': True,
-                'analytics': analytics
-            })
-        
-        except Exception as e:
-            return jsonify({
-                'success': False,
-                'error': str(e)
-            }), 500
-    
-    
+        analytics = session_analytics.export_analytics(validated.student_id)
+
+        return jsonify({
+            'success': True,
+            'analytics': analytics
+        })
+
+
     @app.route("/api/session/stats/<user_id>", methods=['GET'])
+    @handle_endpoint_errors
     def get_user_stats(user_id):
         """
         Retorna estatísticas agregadas de um utilizador.
-        
+
         Example:
             GET /api/session/stats/student123
         """
-        try:
-            if user_id not in session_analytics.user_stats:
-                return jsonify({
-                    'success': False,
-                    'error': 'Utilizador não encontrado'
-                }), 404
-            
-            stats = session_analytics.user_stats[user_id]
-            
-            return jsonify({
-                'success': True,
-                'user_id': user_id,
-                'stats': stats
-            })
-        
-        except Exception as e:
+        # Validação simples para GET
+        if not user_id or not isinstance(user_id, str):
             return jsonify({
                 'success': False,
-                'error': str(e)
-            }), 500
+                'error': 'user_id inválido'
+            }), 400
+
+        if user_id not in session_analytics.user_stats:
+            return jsonify({
+                'success': False,
+                'error': 'Utilizador não encontrado'
+            }), 404
+
+        stats = session_analytics.user_stats[user_id]
+
+        return jsonify({
+            'success': True,
+            'user_id': user_id,
+            'stats': stats
+        })
 
 
 # =====================================================
-# INSTRUÇÕES DE INTEGRAÇÃO
+# DOCUMENTAÇÃO DA REFATORAÇÃO
 # =====================================================
 """
-Para integrar no App.py:
+ANTIPADRÕES RESOLVIDOS:
 
-1. Importar no início:
-   from session_module.session_endpoints import register_session_routes
+1. CUT-AND-PASTE PROGRAMMING
+   Antes: Cada endpoint tinha código de validação similar:
 
-2. Depois de criar app, adicionar:
-   register_session_routes(app)
+   data = request.get_json()
+   if not data or 'field' not in data:
+       return jsonify({'success': False, 'error': '...'}), 400
+   try:
+       ...
+   except Exception as e:
+       return jsonify({'success': False, 'error': str(e)}), 500
 
-3. Testar endpoints:
-   
-   # Iniciar sessão
-   curl -X POST http://localhost:5000/api/session/start \
-     -H "Content-Type: application/json" \
-     -d '{"user_id": "student123"}'
-   
-   # Criar desafio na sessão
-   curl -X POST http://localhost:5000/api/session/challenge \
-     -H "Content-Type: application/json" \
-     -d '{"session_id": "student123_20241124120000", "animal_id": 1, "challenge_type": "audio"}'
-   
-   # Concluir desafio
-   curl -X POST http://localhost:5000/api/session/complete-challenge \
-     -H "Content-Type: application/json" \
-     -d '{"session_id": "student123_20241124120000", "challenge_id": "audio_1_4523", "is_correct": true}'
-   
-   # Terminar sessão
-   curl -X POST http://localhost:5000/api/session/end \
-     -H "Content-Type: application/json" \
-     -d '{"session_id": "student123_20241124120000"}'
-   
-   # Ver relatório
-   curl http://localhost:5000/api/session/report/student123
+   Depois: Decorator @validate_request elimina duplicação:
+
+   @validate_request(Schema)
+   @handle_endpoint_errors
+   def endpoint(validated):
+       # Código focado na lógica de negócio
+
+2. INPUT KLUDGE
+   Antes: Validação apenas de presença:
+
+   if not all(field in data for field in required):
+       return error
+   # Não validava tipos, formatos, ou valores!
+
+   Depois: Schemas validam completamente:
+
+   - Tipos (string, int, bool)
+   - Formatos (não vazio, comprimento máximo)
+   - Valores (ranges, existência de recursos)
+   - Mensagens de erro claras e específicas
+
+BENEFÍCIOS:
+- ~137 linhas de código duplicado eliminadas
+- Validação consistente em todos os endpoints
+- Erros claros indicam exatamente o problema
+- Código dos endpoints focado na lógica de negócio
+- Fácil adicionar novos endpoints com validação
+- Testabilidade: schemas testáveis isoladamente
 """

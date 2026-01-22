@@ -2,7 +2,7 @@
 Classe abstrata base para todos os desafios do jogo.
 
 Padrão de Criação: Factory Method (Produto Abstrato)
-Autores: Henrique Crachat (2501450) & Fábio Amado (2501444)
+Autor: Fábio Amado (2501444)
 """
 from abc import ABC, abstractmethod
 from typing import Dict, Any, List

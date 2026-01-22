@@ -22,7 +22,7 @@ def index():
         'message': 'Dia & Noite: O Mundo dos Animais - Activity Provider',
         'status': 'online',
         'version': '1.0.0',
-        'autores': ['Henrique Crachat (2501450)', 'Fábio Amado (2501444)'],
+        'autores': ['Fábio Amado (2501444)'],
         'endpoints': {
             'config': '/config',
             'params': '/api/params',
@@ -111,7 +111,7 @@ def analytics_list():
     """Retorna lista de todos os analytics disponíveis"""
     return jsonify({
         "quantAnalytics": [
-            # Módulo Henrique (Cognitivo)
+            # Módulo Cognitivo
             {"name": "Total de Respostas", "type": "integer"},
             {"name": "Respostas Corretas", "type": "integer"},
             {"name": "Respostas Incorretas", "type": "integer"},
@@ -158,7 +158,7 @@ def analytics():
     return jsonify({
         "inveniraStdID": invenira_std_id,
         "quantAnalytics": [
-            # Módulo Henrique (Cognitivo)
+            # Módulo Cognitivo
             {
                 "name": "Total de Respostas",
                 "type": "integer",

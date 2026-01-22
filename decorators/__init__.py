@@ -27,7 +27,7 @@ Example:
 >>> # ...
 >>> is_correct = timed_challenge.validate_answer(answer)
 
-Autores: Henrique Crachat (2501450) & Fábio Amado (2501444)
+Autor: Fábio Amado (2501444)
 UC: Arquitetura e Padrões de Software
 Universidade Aberta
 """

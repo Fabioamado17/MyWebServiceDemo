@@ -3,7 +3,7 @@ Base de dados mockup com informações dos animais.
 
 Contém dados de animais para os desafios do jogo "Dia & Noite".
 
-Autores: Henrique Crachat (2501450) & Fábio Amado (2501444)
+Autor: Fábio Amado (2501444)
 """
 import random
 from typing import List, Dict, Optional

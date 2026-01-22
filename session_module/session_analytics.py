@@ -1,19 +1,20 @@
 """
-Módulo de Session Analytics - Fábio Amado (2501444)
+Módulo de Session Analytics - REFATORADO.
 
-Integração do padrão Factory Method com tracking de sessões.
-Responsável por monitorizar:
-- Tempo de jogo por sessão
-- Número de sessões
-- Interações por desafio
-- Dias consecutivos de jogo
-- Padrões de uso
-- Pontuação com Strategy Pattern (Atividade 6)
+REFATORAÇÃO APLICADA: Blob/God Object → Componentes SRP
+
+A classe monolítica original foi decomposta em 5 componentes:
+1. SessionManager - Gestão de sessões
+2. EventTracker - Registo de eventos
+3. StatisticsCalculator - Cálculo de estatísticas
+4. StreakManager - Gestão de streaks
+5. AnalyticsExporter - Exportação para Inven!RA
+
+Esta classe agora atua como FACADE, delegando para os componentes.
 
 Autor: Fábio Amado (2501444@estudante.uab.pt)
 """
-from typing import Dict, List, Optional
-from datetime import datetime, timedelta
+from typing import Dict, List, Optional, Any
 from models.challenge import Challenge
 from strategies.score_calculator import ScoreCalculator
 from strategies.composite_scoring import CompositeScoringStrategy
@@ -21,443 +22,276 @@ from strategies.time_based_scoring import TimeBasedScoringStrategy
 from strategies.accuracy_scoring import AccuracyScoringStrategy
 from strategies.streak_scoring import StreakScoringStrategy
 
+# Componentes SRP (Refatoração Blob/God Object)
+from session_module.components.session_manager import SessionManager
+from session_module.components.event_tracker import EventTracker
+from session_module.components.statistics_calculator import StatisticsCalculator
+from session_module.components.streak_manager import StreakManager
+from session_module.components.analytics_exporter import AnalyticsExporter
+
 
 class SessionAnalytics:
     """
-    Sistema de Analytics de Sessão.
-    
-    Usa o Factory Method (ChallengeFactory) para obter desafios
-    e monitoriza padrões de sessão e interação do aluno.
-    """
-    
-    def __init__(self):
-        """Inicializa o sistema de session analytics"""
-        # Estrutura: {session_id: {dados}}
-        self.sessions: Dict[str, Dict] = {}
-        # Estrutura: {user_id: [session_ids]}
-        self.user_sessions: Dict[str, List[str]] = {}
-        # Estrutura: {user_id: {estatísticas}}
-        self.user_stats: Dict[str, Dict] = {}
+    Facade para o Sistema de Analytics de Sessão.
 
-        # Strategy Pattern: Calculador de pontuação (Atividade 6)
-        # Usa estratégia composta por default (tempo + precisão + streak)
+    PADRÃO ESTRUTURAL: Facade
+    - Fornece interface unificada para os componentes
+    - Mantém compatibilidade com código existente
+    - Delega operações para componentes especializados
+
+    ANTIPADRÃO RESOLVIDO: Blob/God Object
+    - Antes: 464 linhas, 6+ responsabilidades
+    - Depois: ~150 linhas, apenas coordenação
+    """
+
+    def __init__(self):
+        """Inicializa o sistema com componentes especializados."""
+        # Componentes SRP
+        self._session_manager = SessionManager()
+        self._event_tracker = EventTracker()
+        self._stats_calculator = StatisticsCalculator()
+        self._streak_manager = StreakManager()
+        self._analytics_exporter = AnalyticsExporter()
+
+        # Strategy Pattern: Calculador de pontuação
         self.score_calculator = ScoreCalculator(
             CompositeScoringStrategy([
-                (TimeBasedScoringStrategy(), 0.4),    # 40% peso para tempo
-                (AccuracyScoringStrategy(), 0.4),     # 40% peso para precisão
-                (StreakScoringStrategy(), 0.2)        # 20% peso para streak
+                (TimeBasedScoringStrategy(), 0.4),
+                (AccuracyScoringStrategy(), 0.4),
+                (StreakScoringStrategy(), 0.2)
             ])
         )
-    
-    def start_session(self, user_id: str, session_id: Optional[str] = None) -> str:
+
+    # =========================================================
+    # PROPRIEDADES (Backward Compatibility)
+    # =========================================================
+
+    @property
+    def sessions(self) -> Dict[str, Dict]:
+        """Acesso direto às sessões (backward compatibility)."""
+        return self._session_manager.sessions
+
+    @property
+    def user_sessions(self) -> Dict[str, List[str]]:
+        """Acesso direto às sessões por user (backward compatibility)."""
+        return self._session_manager.user_sessions
+
+    @property
+    def user_stats(self) -> Dict[str, Dict]:
+        """Acesso direto às stats (backward compatibility)."""
+        return self._stats_calculator.user_stats
+
+    # =========================================================
+    # MÉTODOS PÚBLICOS (Facade)
+    # =========================================================
+
+    def start_session(self, user_id: str,
+                     session_id: Optional[str] = None) -> str:
         """
         Inicia uma nova sessão de jogo.
-        
+
         Args:
             user_id: ID do utilizador
-            session_id: ID da sessão (gerado se None)
-        
+            session_id: ID personalizado (opcional)
+
         Returns:
             ID da sessão criada
         """
-        if session_id is None:
-            session_id = f"{user_id}_{datetime.now().strftime('%Y%m%d%H%M%S')}"
-        
-        # Criar sessão
-        self.sessions[session_id] = {
-            'session_id': session_id,
-            'user_id': user_id,
-            'start_time': datetime.now().isoformat(),
-            'end_time': None,
-            'duration': 0,
-            'challenges_attempted': 0,
-            'interactions': [],
-            'challenge_times': [],  # Tempo por desafio
-            'active': True,
-            # Campos para Strategy Pattern (Atividade 6)
-            'current_streak': 0,         # Streak atual de acertos
-            'current_challenge_attempts': {},  # {challenge_id: attempts}
-            'scores': [],                # Pontuações de cada desafio
-            'total_score': 0             # Pontuação total da sessão
-        }
-        
-        # Registar sessão do utilizador
-        if user_id not in self.user_sessions:
-            self.user_sessions[user_id] = []
-            self.user_stats[user_id] = {
-                'total_sessions': 0,
-                'total_play_time': 0,
-                'total_challenges': 0,
-                'total_interactions': 0,
-                'consecutive_days': 0,
-                'last_play_date': None,
-                'play_dates': [],
-                # Campos para Strategy Pattern (Atividade 6)
-                'total_score': 0,            # Pontuação total acumulada
-                'best_streak': 0,            # Melhor streak de todos os tempos
-                'avg_score': 0.0             # Pontuação média
-            }
-        
-        self.user_sessions[user_id].append(session_id)
-        self.user_stats[user_id]['total_sessions'] += 1
-        
+        # Delegar para SessionManager
+        session_id = self._session_manager.create_session(user_id, session_id)
+
+        # Inicializar stats do utilizador se necessário
+        self._stats_calculator.init_user_stats(user_id)
+        self._stats_calculator.increment_session_count(user_id)
+
         # Atualizar dias consecutivos
-        self._update_consecutive_days(user_id)
-        
+        self._streak_manager.update_consecutive_days(
+            self._stats_calculator.user_stats[user_id]
+        )
+
         return session_id
-    
-    def log_challenge_start(self, session_id: str, challenge: Challenge) -> None:
+
+    def log_challenge_start(self, session_id: str,
+                           challenge: Challenge) -> None:
         """
         Regista início de um desafio.
-        
-        Integração com Factory Method:
-        - Recebe instância de Challenge criada pelo Factory
-        - Extrai informações do desafio para tracking
-        
+
         Args:
             session_id: ID da sessão
-            challenge: Instância de Challenge (do Factory)
+            challenge: Instância de Challenge
         """
-        if session_id not in self.sessions:
-            raise ValueError(f"Sessão {session_id} não encontrada")
-        
-        session = self.sessions[session_id]
-        
-        interaction = {
-            'type': 'challenge_start',
-            'challenge_id': challenge.challenge_id,
-            'challenge_type': challenge.get_challenge_type(),
-            'animal_id': challenge.animal_id,
-            'timestamp': datetime.now().isoformat(),
-            'start_time': datetime.now()
-        }
-        
-        session['interactions'].append(interaction)
-        session['challenges_attempted'] += 1
+        session = self._session_manager.get_session(session_id)
 
-        # Inicializar tracking de tentativas para este desafio (Atividade 6)
-        if challenge.challenge_id not in session['current_challenge_attempts']:
-            session['current_challenge_attempts'][challenge.challenge_id] = 0
+        # Delegar para EventTracker
+        self._event_tracker.log_challenge_start(session, challenge)
 
         # Atualizar stats do utilizador
         user_id = session['user_id']
-        self.user_stats[user_id]['total_challenges'] += 1
-        self.user_stats[user_id]['total_interactions'] += 1
-    
-    def log_challenge_complete(self, session_id: str, challenge_id: str,
-                              is_correct: bool, difficulty: int = 3,
+        self._stats_calculator.increment_challenge_count(user_id)
+        self._stats_calculator.increment_interaction_count(user_id)
+
+    def log_challenge_complete(self, session_id: str,
+                              challenge_id: str,
+                              is_correct: bool,
+                              difficulty: int = 3,
                               time_limit: Optional[float] = None) -> Dict[str, Any]:
         """
-        Regista conclusão de um desafio e calcula pontuação (Strategy Pattern).
+        Regista conclusão de um desafio e calcula pontuação.
 
         Args:
             session_id: ID da sessão
             challenge_id: ID do desafio
-            is_correct: Se a resposta estava correta
-            difficulty: Nível de dificuldade (1-5, default: 3)
-            time_limit: Limite de tempo em segundos (opcional)
+            is_correct: Se resposta estava correta
+            difficulty: Nível de dificuldade
+            time_limit: Limite de tempo
 
         Returns:
-            Dicionário com pontuação e detalhes calculados
+            Resultado da pontuação
         """
-        if session_id not in self.sessions:
-            raise ValueError(f"Sessão {session_id} não encontrada")
-        
-        session = self.sessions[session_id]
-        
-        # Encontrar interação de início correspondente
-        start_interaction = None
-        for interaction in reversed(session['interactions']):
-            if (interaction['type'] == 'challenge_start' and 
-                interaction['challenge_id'] == challenge_id):
-                start_interaction = interaction
-                break
-        
-        # Incrementar tentativas (Atividade 6)
-        attempts = session['current_challenge_attempts'].get(challenge_id, 0) + 1
-        session['current_challenge_attempts'][challenge_id] = attempts
+        session = self._session_manager.get_session(session_id)
+        user_id = session['user_id']
 
-        # Calcular tempo e pontuação (Strategy Pattern - Atividade 6)
+        # Incrementar tentativas
+        attempts = self._event_tracker.increment_attempts(
+            session, challenge_id
+        )
+
+        # Encontrar tempo do desafio
+        start_interaction = self._event_tracker._find_challenge_start(
+            session, challenge_id
+        )
+
         duration = 0
-        score_result = {}
-
         if start_interaction:
-            # Calcular tempo gasto no desafio
-            end_time = datetime.now()
-            duration = (end_time - start_interaction['start_time']).total_seconds()
+            from datetime import datetime
+            duration = (
+                datetime.now() - start_interaction['start_time']
+            ).total_seconds()
 
-            # Preparar contexto para Strategy Pattern
-            scoring_context = {
-                'time_taken': duration,
-                'time_limit': time_limit or 30,  # Default 30s
-                'is_correct': is_correct,
-                'attempts': attempts,
-                'difficulty': difficulty,
-                'streak': session['current_streak']
-            }
-
-            # Calcular pontuação usando Strategy Pattern
-            score_result = self.score_calculator.get_detailed_result(scoring_context)
-
-            # Atualizar streak
-            if is_correct:
-                session['current_streak'] += 1
-            else:
-                session['current_streak'] = 0
-
-            # Armazenar score
-            session['scores'].append(score_result)
-            session['total_score'] += score_result['score']
-
-            session['challenge_times'].append({
-                'challenge_id': challenge_id,
-                'challenge_type': start_interaction['challenge_type'],
-                'duration': duration,
-                'is_correct': is_correct,
-                'attempts': attempts,
-                'score': score_result['score'],
-                'performance': score_result['performance']
-            })
-
-        # Registar interação de conclusão
-        interaction = {
-            'type': 'challenge_complete',
-            'challenge_id': challenge_id,
+        # Calcular pontuação usando Strategy Pattern
+        scoring_context = {
+            'time_taken': duration,
+            'time_limit': time_limit or 30,
             'is_correct': is_correct,
-            'timestamp': datetime.now().isoformat(),
-            'score': score_result.get('score', 0),
-            'performance': score_result.get('performance', 'poor')
+            'attempts': attempts,
+            'difficulty': difficulty,
+            'streak': session['current_streak']
         }
+        score_result = self.score_calculator.get_detailed_result(scoring_context)
 
-        session['interactions'].append(interaction)
+        # Registar evento de conclusão
+        self._event_tracker.log_challenge_complete(
+            session, challenge_id, is_correct, score_result
+        )
+
+        # Atualizar streak na sessão
+        current_streak = self._streak_manager.update_session_streak(
+            session, is_correct
+        )
+
+        # Armazenar score na sessão
+        session['scores'].append(score_result)
+        session['total_score'] += score_result['score']
 
         # Atualizar stats do utilizador
-        user_id = session['user_id']
-        self.user_stats[user_id]['total_interactions'] += 1
-
-        # Atualizar best streak (Atividade 6)
-        if session['current_streak'] > self.user_stats[user_id]['best_streak']:
-            self.user_stats[user_id]['best_streak'] = session['current_streak']
+        self._stats_calculator.increment_interaction_count(user_id)
+        self._streak_manager.check_best_streak(
+            self._stats_calculator.user_stats[user_id],
+            current_streak
+        )
 
         return score_result
-    
-    def log_interaction(self, session_id: str, event_type: str, 
+
+    def log_interaction(self, session_id: str,
+                       event_type: str,
                        event_data: Optional[Dict] = None) -> None:
         """
         Regista uma interação genérica.
-        
+
         Args:
             session_id: ID da sessão
-            event_type: Tipo de evento (click, hover, navigation, etc)
-            event_data: Dados adicionais do evento
+            event_type: Tipo de evento
+            event_data: Dados adicionais
         """
-        if session_id not in self.sessions:
-            raise ValueError(f"Sessão {session_id} não encontrada")
-        
-        session = self.sessions[session_id]
-        
-        interaction = {
-            'type': event_type,
-            'timestamp': datetime.now().isoformat(),
-            'data': event_data or {}
-        }
-        
-        session['interactions'].append(interaction)
-        self.user_stats[session['user_id']]['total_interactions'] += 1
-    
+        session = self._session_manager.get_session(session_id)
+
+        # Delegar para EventTracker
+        self._event_tracker.log_interaction(session, event_type, event_data)
+
+        # Atualizar stats
+        self._stats_calculator.increment_interaction_count(session['user_id'])
+
     def end_session(self, session_id: str) -> Dict:
         """
         Termina uma sessão e calcula estatísticas.
-        
+
         Args:
             session_id: ID da sessão
-        
+
         Returns:
             Sumário da sessão
         """
-        if session_id not in self.sessions:
-            raise ValueError(f"Sessão {session_id} não encontrada")
-        
-        session = self.sessions[session_id]
-        
-        if not session['active']:
-            return self.get_session_summary(session_id)
-        
-        # Calcular duração
-        start = datetime.fromisoformat(session['start_time'])
-        end = datetime.now()
-        duration = (end - start).total_seconds()
-        
-        session['end_time'] = end.isoformat()
-        session['duration'] = duration
-        session['active'] = False
-        
-        # Atualizar stats do utilizador (incluindo pontuação - Atividade 6)
-        user_id = session['user_id']
-        self.user_stats[user_id]['total_play_time'] += duration
-        self.user_stats[user_id]['total_score'] += session['total_score']
+        # Delegar terminação
+        session = self._session_manager.end_session(session_id)
 
-        # Calcular média de pontuação
-        total_challenges = self.user_stats[user_id]['total_challenges']
-        if total_challenges > 0:
-            self.user_stats[user_id]['avg_score'] = (
-                self.user_stats[user_id]['total_score'] / total_challenges
-            )
+        if not session['active']:  # Já estava inativa
+            return self.get_session_summary(session_id)
+
+        # Atualizar stats do utilizador
+        user_id = session['user_id']
+        self._stats_calculator.update_play_time(user_id, session['duration'])
+        self._stats_calculator.update_score_stats(
+            user_id,
+            session['total_score'],
+            session['current_streak']
+        )
 
         return self.get_session_summary(session_id)
-    
+
     def get_session_summary(self, session_id: str) -> Dict:
         """
         Retorna sumário de uma sessão.
-        
+
         Args:
             session_id: ID da sessão
-        
+
         Returns:
-            Sumário completo da sessão
+            Sumário completo
         """
-        if session_id not in self.sessions:
-            raise ValueError(f"Sessão {session_id} não encontrada")
-        
-        session = self.sessions[session_id]
-        
-        # Calcular tempo médio por desafio
-        avg_challenge_time = 0
-        if session['challenge_times']:
-            avg_challenge_time = sum(
-                ct['duration'] for ct in session['challenge_times']
-            ) / len(session['challenge_times'])
-        
-        # Contar interações por tipo
-        interaction_counts = {}
-        for interaction in session['interactions']:
-            itype = interaction['type']
-            interaction_counts[itype] = interaction_counts.get(itype, 0) + 1
-        
-        return {
-            'session_id': session_id,
-            'user_id': session['user_id'],
-            'duration': session['duration'],
-            'challenges_attempted': session['challenges_attempted'],
-            'total_interactions': len(session['interactions']),
-            'interaction_breakdown': interaction_counts,
-            'avg_challenge_time': round(avg_challenge_time, 2),
-            'challenge_times': session['challenge_times'],
-            'start_time': session['start_time'],
-            'end_time': session['end_time'],
-            'active': session['active'],
-            # Dados de pontuação - Strategy Pattern (Atividade 6)
-            'total_score': session.get('total_score', 0),
-            'current_streak': session.get('current_streak', 0),
-            'scores': session.get('scores', [])
-        }
-    
+        session = self._session_manager.get_session(session_id)
+        return self._stats_calculator.calculate_session_summary(session)
+
     def get_user_sessions_report(self, user_id: str) -> Dict:
         """
         Retorna relatório de todas as sessões de um utilizador.
-        
+
         Args:
             user_id: ID do utilizador
-        
+
         Returns:
-            Relatório agregado de sessões
+            Relatório agregado
         """
-        if user_id not in self.user_sessions:
-            return {
-                'user_id': user_id,
-                'total_sessions': 0,
-                'sessions': []
-            }
-        
-        sessions_data = []
-        for session_id in self.user_sessions[user_id]:
-            sessions_data.append(self.get_session_summary(session_id))
-        
-        stats = self.user_stats[user_id]
-        
-        return {
-            'user_id': user_id,
-            'total_sessions': stats['total_sessions'],
-            'total_play_time': stats['total_play_time'],
-            'avg_session_time': (
-                stats['total_play_time'] / stats['total_sessions']
-                if stats['total_sessions'] > 0 else 0
-            ),
-            'total_challenges': stats['total_challenges'],
-            'total_interactions': stats['total_interactions'],
-            'consecutive_days': stats['consecutive_days'],
-            # Dados de pontuação - Strategy Pattern (Atividade 6)
-            'total_score': stats.get('total_score', 0),
-            'avg_score': round(stats.get('avg_score', 0.0), 2),
-            'best_streak': stats.get('best_streak', 0),
-            'sessions': sessions_data
-        }
-    
-    def _update_consecutive_days(self, user_id: str) -> None:
-        """Atualiza contagem de dias consecutivos"""
-        stats = self.user_stats[user_id]
-        today = datetime.now().date()
-        
-        # Adicionar data de hoje
-        if today not in stats['play_dates']:
-            stats['play_dates'].append(today)
-        
-        # Calcular dias consecutivos
-        if stats['last_play_date']:
-            last_date = datetime.fromisoformat(stats['last_play_date']).date()
-            diff = (today - last_date).days
-            
-            if diff == 1:
-                # Dia consecutivo
-                stats['consecutive_days'] += 1
-            elif diff > 1:
-                # Quebrou sequência
-                stats['consecutive_days'] = 1
-        else:
-            stats['consecutive_days'] = 1
-        
-        stats['last_play_date'] = today.isoformat()
-    
+        session_ids = self._session_manager.get_user_sessions(user_id)
+        sessions_data = [
+            self.get_session_summary(sid) for sid in session_ids
+        ]
+
+        return self._stats_calculator.calculate_user_report(
+            user_id, sessions_data
+        )
+
     def export_analytics(self, user_id: str) -> Dict:
         """
-        Exporta analytics em formato compatível com Inven!RA.
-        
+        Exporta analytics em formato Inven!RA.
+
         Args:
             user_id: ID do utilizador
-        
+
         Returns:
             Dados formatados para Inven!RA
         """
-        if user_id not in self.user_stats:
-            return {
-                'studentId': user_id,
-                'activityId': 'dia-noite-animals',
-                'sessionMetrics': {},
-                'timestamp': datetime.now().isoformat()
-            }
-        
-        stats = self.user_stats[user_id]
-        
-        return {
-            'studentId': user_id,
-            'activityId': 'dia-noite-animals',
-            'sessionMetrics': {
-                'totalSessions': stats['total_sessions'],
-                'totalPlayTime': stats['total_play_time'],
-                'totalChallenges': stats['total_challenges'],
-                'totalInteractions': stats['total_interactions'],
-                'consecutiveDays': stats['consecutive_days'],
-                'avgSessionTime': (
-                    stats['total_play_time'] / stats['total_sessions']
-                    if stats['total_sessions'] > 0 else 0
-                ),
-                # Dados de pontuação - Strategy Pattern (Atividade 6)
-                'totalScore': stats.get('total_score', 0),
-                'avgScore': round(stats.get('avg_score', 0.0), 2),
-                'bestStreak': stats.get('best_streak', 0)
-            },
-            'timestamp': datetime.now().isoformat()
-        }
+        user_stats = self._stats_calculator.user_stats.get(user_id)
+        return self._analytics_exporter.export_for_invenira(user_id, user_stats)
 
 
 # Instância global (singleton para simplificar)

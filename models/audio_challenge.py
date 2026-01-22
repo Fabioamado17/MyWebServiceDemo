@@ -2,7 +2,7 @@
 Desafio de reconhecimento auditivo.
 
 Padrão de Criação: Factory Method (Produto Concreto)
-Autores: Henrique Crachat (2501450) & Fábio Amado (2501444)
+Autor: Fábio Amado (2501444)
 """
 from models.challenge import Challenge
 from typing import List
